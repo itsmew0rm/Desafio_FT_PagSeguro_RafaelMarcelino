@@ -1,0 +1,47 @@
+##Script de DAG para Desafio do Fast Track edição Set/2021
+##Desafio PagSeguro
+
+# IMPORTS
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime
+
+from airflow.models import Variable
+from datetime import date
+import pandas as pd
+from sqlalchemy import create_engine
+import numpy as np
+
+from datetime import date, datetime
+from kaggle.api.kaggle_api_extended import KaggleApi
+import zipfile
+
+def importar_dataset():
+    # Importação dos dados e descompactação
+    api = KaggleApi()
+    api.authenticate()
+    api.dataset_download_file('ealaxi/banksim1', file_name='bs140513_032310.csv', force=False)
+
+    with zipfile.ZipFile('bs140513_032310.csv.zip', 'r') as zipref:
+        zipref.extractall()
+
+def criar_df():
+    return pd.read_csv('bs140513_032310.csv.zip', delimiter=',', quotechar="'", index_col=False)
+
+
+def tratamento_df():
+    transactions_csv = criar_df()
+
+############################################################################################################################################
+with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
+    get_data = PythonOperator(
+        task_id="get_data",
+        python_callable=importar_dataset
+    )
+
+    treat_data = PythonOperator(
+        task_id="treat_data",
+        python_callable=tratamento_df
+    )
+
+    get_data >> treat_data
