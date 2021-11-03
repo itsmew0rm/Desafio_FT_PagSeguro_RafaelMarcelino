@@ -10,6 +10,7 @@ import numpy as np
 from datetime import date, datetime
 from kaggle.api.kaggle_api_extended import KaggleApi
 import zipfile
+from sqlalchemy import create_engine
 
 def importar_dataset():
     # Importação dos dados e descompactação
@@ -54,7 +55,7 @@ def limpeza_dados(df):
     df["aux1"]=np.where((df["mes"] == 5), date(__year,5,__day), df["aux1"])
     df["aux1"]=np.where((df["mes"] == 6), date(__year,6,__day), df["aux1"])
 
-def dimensional_modeling(df):
+def dimensional_modeling(df, engine):
    
     # Cria 2 tabelas fato e 1 dimensão
     fact_merchant_kpi=df.groupby(["aux1", "merchant"], as_index=False).agg(tpv=('amount','sum'), qtd_transacoes=('merchant','count'))
@@ -69,21 +70,20 @@ def dimensional_modeling(df):
     fact_customer_kpi.rename(columns={"customer":"id_customer", "aux1": "data"}, inplace=True)
     dim_merchant_category.rename(columns={"merchant":"id_merchant"}, inplace=True)
 
-    #Cria dict de criação das tabelas
-    __transactions={"df": df, "table": "transactions", "schema": "db", "index": True, "index_label": "id"}
-    __fact_merchant_kpi={"df": fact_merchant_kpi, "table": "fact_merchant_kpi", "schema": "analytic", "index": False, "index_label": ""}
-    __fact_customer_kpi={"df": fact_customer_kpi, "table": "fact_customer_kpi", "schema": "analytic", "index": False, "index_label": ""}
-    __dim_merchant_category={"df": dim_merchant_category, "table": "dim_merchant_category", "schema": "analytic", "index": False, "index_label": ""}
-    
-    return [__transactions, __fact_merchant_kpi, __fact_customer_kpi, __dim_merchant_category] 
+    # Grava Tabelas
+    df.to_sql(con=engine, schema='db', name='transactions', if_exists="replace", index=True, index_label='ID')
+    fact_merchant_kpi.to_sql(con=engine, schema='analytic', name='fact_merchant_kpi', if_exists="replace", index=False, index_label='')
+    fact_customer_kpi.to_sql(con=engine, schema='analytic', name='fact_customer_kpi', if_exists="replace", index=False, index_label='')
+    dim_merchant_category.to_sql(con=engine, schema='analytic', name='dim_merchant_category', if_exists="replace", index=False, index_label='')
+ 
 
-def get_conn_mysql():
-    __user_mysql = Variable.get("MYSQL_USER")
-    __password_mysql = Variable.get("MYSQL_PASSWORD")
-    __host_mysql = Variable.get("MYSQL_HOST")
-    __port_mysql = Variable.get("MYSQL_PORT")
-    __mysql_conn = f"mysql://{__user_mysql}:{__password_mysql}@{__host_mysql}:{__port_mysql}"
-    return create_engine(__mysql_conn, echo=False)
+#def get_conn_mysql():
+#    __user_mysql = Variable.get("MYSQL_USER")
+#    __password_mysql = Variable.get("MYSQL_PASSWORD")
+#    __host_mysql = Variable.get("MYSQL_HOST")
+#    __port_mysql = Variable.get("MYSQL_PORT")
+#    __mysql_conn = f"mysql://{__user_mysql}:{__password_mysql}@{__host_mysql}:{__port_mysql}"
+#    return create_engine(__mysql_conn, echo=False)
 
 def record_data(engine, df_dict_list):  
     for df_dict in df_dict_list:
@@ -100,9 +100,8 @@ def record_data(engine, df_dict_list):
 def tratamento_df():
     transactions_csv = criar_df()
     limpeza_dados(transactions_csv)
-    df_dict_list=dimensional_modeling(transactions_csv)
-    engine=get_conn_mysql()
-    record_data(engine, df_dict_list)
+    engine=create_engine('mysql+mysqldb://rafael:Airflow1234!@localhost:3306/airflow') 
+    dimensional_modeling(transactions_csv, engine)
 
 ############################################################################################################################################
 with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
