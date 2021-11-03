@@ -27,6 +27,14 @@ def limpeza_dados(df):
     df["age"].mask(df["age"]=='U', 0, inplace=True)
     df["age"]=df["age"].astype('int')
 
+    # Limpa coluna gender para somente M e F ou None
+    df["gender"].where((df["gender"]=="M") | (df["gender"]=="F"), None, inplace=True)
+
+    # Substitui os 0 em amount por Null
+    df["amount"].mask(df["amount"]==0, None, inplace=True)    
+
+    
+
 def tratamento_df():
     transactions_csv = criar_df()
     limpeza_dados(transactions_csv)
