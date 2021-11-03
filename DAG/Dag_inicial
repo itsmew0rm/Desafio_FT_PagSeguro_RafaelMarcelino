@@ -77,12 +77,32 @@ def dimensional_modeling(df):
     
     return [__transactions, __fact_merchant_kpi, __fact_customer_kpi, __dim_merchant_category] 
 
+def get_conn_mysql():
+    __user_mysql = Variable.get("MYSQL_USER")
+    __password_mysql = Variable.get("MYSQL_PASSWORD")
+    __host_mysql = Variable.get("MYSQL_HOST")
+    __port_mysql = Variable.get("MYSQL_PORT")
+    __mysql_conn = f"mysql://{__user_mysql}:{__password_mysql}@{__host_mysql}:{__port_mysql}"
+    return create_engine(__mysql_conn, echo=False)
+
+def record_data(engine, df_dict_list):  
+    for df_dict in df_dict_list:
+        df_dict["df"].to_sql(
+            con=engine,
+            schema=df_dict["schema"],
+            name=df_dict["table"],
+            if_exists="replace",
+            index=df_dict["index"],
+            index_label=df_dict["index_label"]
+        )
 
 
 def tratamento_df():
     transactions_csv = criar_df()
     limpeza_dados(transactions_csv)
     df_dict_list=dimensional_modeling(transactions_csv)
+    engine=get_conn_mysql()
+    record_data(engine, df_dict_list)
 
 ############################################################################################################################################
 with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
