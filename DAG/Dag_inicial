@@ -54,10 +54,35 @@ def limpeza_dados(df):
     df["aux1"]=np.where((df["mes"] == 5), date(__year,5,__day), df["aux1"])
     df["aux1"]=np.where((df["mes"] == 6), date(__year,6,__day), df["aux1"])
 
+def dimensional_modeling(df):
+   
+    # Cria 2 tabelas fato e 1 dimensão
+    fact_merchant_kpi=df.groupby(["aux1", "merchant"], as_index=False).agg(tpv=('amount','sum'), qtd_transacoes=('merchant','count'))
+    fact_customer_kpi=df.groupby(["aux1", "customer"], as_index=False).agg(tpv=('amount','sum'), qtd_transacoes=('customer','count'))
+    dim_merchant_category=df.groupby(["merchant", "category"], as_index=False).any()[["merchant", "category"]]
+
+    # Deleta coluna auxiliar para data
+    df.drop(labels=["aux1"], inplace=True, axis=1)
+
+    # Renomeia colunas 
+    fact_merchant_kpi.rename(columns={"merchant":"id_merchant", "aux1": "data"}, inplace=True)
+    fact_customer_kpi.rename(columns={"customer":"id_customer", "aux1": "data"}, inplace=True)
+    dim_merchant_category.rename(columns={"merchant":"id_merchant"}, inplace=True)
+
+    #Cria dict de criação das tabelas
+    __transactions={"df": df, "table": "transactions", "schema": "db", "index": True, "index_label": "id"}
+    __fact_merchant_kpi={"df": fact_merchant_kpi, "table": "fact_merchant_kpi", "schema": "analytic", "index": False, "index_label": ""}
+    __fact_customer_kpi={"df": fact_customer_kpi, "table": "fact_customer_kpi", "schema": "analytic", "index": False, "index_label": ""}
+    __dim_merchant_category={"df": dim_merchant_category, "table": "dim_merchant_category", "schema": "analytic", "index": False, "index_label": ""}
+    
+    return [__transactions, __fact_merchant_kpi, __fact_customer_kpi, __dim_merchant_category] 
+
+
 
 def tratamento_df():
     transactions_csv = criar_df()
     limpeza_dados(transactions_csv)
+    df_dict_list=dimensional_modeling(transactions_csv)
 
 ############################################################################################################################################
 with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
