@@ -21,10 +21,15 @@ def importar_dataset():
 
 def criar_df():
     return pd.read_csv('bs140513_032310.csv.zip', delimiter=',', quotechar="'", index_col=False)
-
+    
+def limpeza_dados(df):
+    # Transforma data type da coluna age em int
+    df["age"].mask(df["age"]=='U', 0, inplace=True)
+    df["age"]=df["age"].astype('int')
 
 def tratamento_df():
     transactions_csv = criar_df()
+    limpeza_dados(transactions_csv)
 
 ############################################################################################################################################
 with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
