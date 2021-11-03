@@ -1,0 +1,108 @@
+##Script de DAG para Desafio do Fast Track edição Set/2021
+
+#################################################### IMPORTS ###########################################################
+
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime
+
+from datetime import date
+import pandas as pd
+from sqlalchemy import create_engine
+import numpy as np
+
+from datetime import date, datetime
+from kaggle.api.kaggle_api_extended import KaggleApi
+import zipfile
+
+#################################################### TASKS ###########################################################
+
+def importar_dataset():
+    # Importação dos dados e descompactação
+    api=KaggleApi()
+    api.authenticate()
+    api.dataset_download_file('ealaxi/banksim1', file_name='bs140513_032310.csv', force=False)
+
+    with zipfile.ZipFile('bs140513_032310.csv.zip', 'r') as zipref:
+        zipref.extractall()
+
+
+def tratamento_df():
+    transactions_csv=__criar_df()
+    __limpeza_dados(transactions_csv)
+    engine=create_engine('mysql+mysqldb://rafael:Airflow1234!@localhost:3306/airflow') 
+    __dimensional_modeling(transactions_csv, engine)
+
+#################################################### FUNÇÕES ###########################################################
+
+def __criar_df():
+    return pd.read_csv('bs140513_032310.csv.zip', delimiter=',', quotechar="'", index_col=False)
+
+def __limpeza_dados(df):
+    # Transforma data type da coluna age em int
+    df["age"].mask(df["age"] == 'U', 0, inplace=True)
+    df["age"] = df["age"].astype('int')
+
+    # Limpa coluna gender para somente M e F ou None
+    df["gender"].where((df["gender"] == "M") | (df["gender"] == "F"), None, inplace=True)
+
+    # Substitui os 0 em amount por Null
+    df["amount"].mask(df["amount"] == 0, None, inplace=True)
+
+    # Cria coluna ano, mes e data - trava ano em 2021, mes conforme step e dia em 1
+    __year = 2021
+    df["ano"] = __year
+    df["mes"] = 0
+    df["mes"] = np.where((df["step"] >= 0) & (df["step"] <= 30), 1, df["mes"])
+    df["mes"] = np.where((df["step"] >= 31) & (df["step"] <= 60), 2, df["mes"])
+    df["mes"] = np.where((df["step"] >= 61) & (df["step"] <= 90), 3, df["mes"])
+    df["mes"] = np.where((df["step"] >= 91) & (df["step"] <= 120), 4, df["mes"])
+    df["mes"] = np.where((df["step"] >= 121) & (df["step"] <= 150), 5, df["mes"])
+    df["mes"] = np.where((df["step"] >= 151) & (df["step"] <= 180), 6, df["mes"])
+    __day = 1
+    df["data"] = __day
+    df["aux1"] = None
+    df["aux1"] = np.where((df["mes"] == 1), date(__year, 1, __day), df["aux1"])
+    df["aux1"] = np.where((df["mes"] == 2), date(__year, 2, __day), df["aux1"])
+    df["aux1"] = np.where((df["mes"] == 3), date(__year, 3, __day), df["aux1"])
+    df["aux1"] = np.where((df["mes"] == 4), date(__year, 4, __day), df["aux1"])
+    df["aux1"] = np.where((df["mes"] == 5), date(__year, 5, __day), df["aux1"])
+    df["aux1"] = np.where((df["mes"] == 6), date(__year, 6, __day), df["aux1"])
+    
+def __dimensional_modeling(df, engine):
+    
+    # Cria 2 tabelas fato e 1 dimensão
+    fact_merchant_kpi=df.groupby(["aux1", "merchant"], as_index=False).agg(tpv=('amount', 'sum'),
+                                                                             qtd_transacoes=('merchant', 'count'))
+    fact_customer_kpi=df.groupby(["aux1", "customer"], as_index=False).agg(tpv=('amount', 'sum'),
+                                                                             qtd_transacoes=('customer', 'count'))
+    dim_merchant_category=df.groupby(["merchant", "category"], as_index=False).any()[["merchant", "category"]]
+    
+    # Deleta coluna auxiliar para data
+    df.drop(labels=["aux1"], inplace=True, axis=1)
+
+    # Renomeia colunas 
+    fact_merchant_kpi.rename(columns={"merchant": "id_merchant", "aux1": "data"}, inplace=True)
+    fact_customer_kpi.rename(columns={"customer": "id_customer", "aux1": "data"}, inplace=True)
+    dim_merchant_category.rename(columns={"merchant": "id_merchant"}, inplace=True)
+
+    # Grava Tabelas
+    df.to_sql(con=engine, schema='db', name='transactions', if_exists="replace", index=True, index_label='ID')
+    fact_merchant_kpi.to_sql(con=engine, schema='analytic', name='fact_merchant_kpi', if_exists="replace", index=False, index_label='')
+    fact_customer_kpi.to_sql(con=engine, schema='analytic', name='fact_customer_kpi', if_exists="replace", index=False, index_label='')
+    dim_merchant_category.to_sql(con=engine, schema='analytic', name='dim_merchant_category', if_exists="replace", index=False, index_label='')
+
+#################################################### CÓDIGO DA DAG ###########################################################
+
+with DAG("chlg_pagseguro_dag", start_date=datetime(2021, 1, 1), schedule_interval='@daily', catchup=False) as dag:
+    get_data = PythonOperator(
+        task_id="get_data",
+        python_callable=importar_dataset
+    )
+
+    treat_data = PythonOperator(
+        task_id="treat_data",
+        python_callable=tratamento_df
+    )
+
+    get_data >> treat_data
