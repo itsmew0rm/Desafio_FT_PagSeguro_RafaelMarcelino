@@ -33,7 +33,26 @@ def limpeza_dados(df):
     # Substitui os 0 em amount por Null
     df["amount"].mask(df["amount"]==0, None, inplace=True)    
 
-    
+    # Cria coluna ano, mes e data - trava ano em 2021, mes conforme step e dia em 1
+    __year=2021
+    df["ano"]=__year
+    df["mes"]=0  
+    df["mes"]=np.where((df["step"] >= 0) & (df["step"] <= 30), 1, df["mes"])
+    df["mes"]=np.where((df["step"] >= 31) & (df["step"] <= 60), 2, df["mes"])
+    df["mes"]=np.where((df["step"] >= 61) & (df["step"] <= 90), 3, df["mes"])
+    df["mes"]=np.where((df["step"] >= 91) & (df["step"] <= 120), 4, df["mes"])
+    df["mes"]=np.where((df["step"] >= 121) & (df["step"] <= 150), 5, df["mes"])
+    df["mes"]=np.where((df["step"] >= 151) & (df["step"] <= 180), 6, df["mes"])  
+    __day=1
+    df["data"]=__day
+    df["aux1"]=None
+    df["aux1"]=np.where((df["mes"] == 1), date(__year,1,__day), df["aux1"])
+    df["aux1"]=np.where((df["mes"] == 2), date(__year,2,__day), df["aux1"])
+    df["aux1"]=np.where((df["mes"] == 3), date(__year,3,__day), df["aux1"])
+    df["aux1"]=np.where((df["mes"] == 4), date(__year,4,__day), df["aux1"])
+    df["aux1"]=np.where((df["mes"] == 5), date(__year,5,__day), df["aux1"])
+    df["aux1"]=np.where((df["mes"] == 6), date(__year,6,__day), df["aux1"])
+
 
 def tratamento_df():
     transactions_csv = criar_df()
