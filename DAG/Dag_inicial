@@ -85,16 +85,16 @@ def dimensional_modeling(df, engine):
 #    __mysql_conn = f"mysql://{__user_mysql}:{__password_mysql}@{__host_mysql}:{__port_mysql}"
 #    return create_engine(__mysql_conn, echo=False)
 
-def record_data(engine, df_dict_list):  
-    for df_dict in df_dict_list:
-        df_dict["df"].to_sql(
-            con=engine,
-            schema=df_dict["schema"],
-            name=df_dict["table"],
-            if_exists="replace",
-            index=df_dict["index"],
-            index_label=df_dict["index_label"]
-        )
+#def record_data(engine, df_dict_list):  
+#    for df_dict in df_dict_list:
+#        df_dict["df"].to_sql(
+#            con=engine,
+#            schema=df_dict["schema"],
+#            name=df_dict["table"],
+#            if_exists="replace",
+#            index=df_dict["index"],
+#            index_label=df_dict["index_label"]
+#        )
 
 
 def tratamento_df():
